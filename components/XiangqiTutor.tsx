@@ -220,20 +220,73 @@ const XiangqiTutor: React.FC = () => {
             <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
               <h3 className="text-lg font-semibold mb-4 text-gray-800">棋盘演示</h3>
               <div className="flex justify-center">
-                <div className="relative" style={{ width: 'calc(8 * 4rem)', height: 'calc(9 * 4rem)', padding: '2rem' }}>
-                  <div className="absolute top-0 left-0 w-full h-full bg-amber-200" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100%\' height=\'100%\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cdefs%3E%3Cpattern id=\'grid\' width=\'64\' height=\'64\' patternUnits=\'userSpaceOnUse\'%3E%3Cpath d=\'M 64 0 L 0 0 0 64\' fill=\'none\' stroke=\'%238c4a08\' stroke-width=\'1\'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width=\'100%\' height=\'100%\' fill=\'%23fdeec9\'/%3E%3Crect width=\'100%\' height=\'100%\' fill=\'url(%23grid)\'/%3E%3C/svg%3E")'}}>
-                  </div>
+                <div className="relative bg-amber-50" style={{ width: '360px', height: '400px', padding: '20px' }}>
+                  {/* 棋盘背景 */}
+                  <svg width="320" height="360" className="absolute" style={{ left: '20px', top: '20px' }}>
+                    {/* 横线 - 10条 */}
+                    {[...Array(10)].map((_, i) => (
+                      <line
+                        key={`h-${i}`}
+                        x1="0"
+                        y1={i * 40}
+                        x2="320"
+                        y2={i * 40}
+                        stroke="#8c4a08"
+                        strokeWidth="2"
+                      />
+                    ))}
+                    {/* 竖线 - 边界两条完整，中间7条断开 */}
+                    {[...Array(9)].map((_, i) => {
+                      if (i === 0 || i === 8) {
+                        // 边界竖线完整
+                        return (
+                          <line
+                            key={`v-${i}`}
+                            x1={i * 40}
+                            y1="0"
+                            x2={i * 40}
+                            y2="360"
+                            stroke="#8c4a08"
+                            strokeWidth="2"
+                          />
+                        );
+                      } else {
+                        // 中间竖线断开
+                        return (
+                          <g key={`v-${i}`}>
+                            <line
+                              x1={i * 40}
+                              y1="0"
+                              x2={i * 40}
+                              y2="160"
+                              stroke="#8c4a08"
+                              strokeWidth="2"
+                            />
+                            <line
+                              x1={i * 40}
+                              y1="200"
+                              x2={i * 40}
+                              y2="360"
+                              stroke="#8c4a08"
+                              strokeWidth="2"
+                            />
+                          </g>
+                        );
+                      }
+                    })}
+                    {/* 九宫格对角线 - 上方 */}
+                    <line x1="120" y1="0" x2="200" y2="80" stroke="#8c4a08" strokeWidth="2"/>
+                    <line x1="200" y1="0" x2="120" y2="80" stroke="#8c4a08" strokeWidth="2"/>
+                    {/* 九宫格对角线 - 下方 */}
+                    <line x1="120" y1="280" x2="200" y2="360" stroke="#8c4a08" strokeWidth="2"/>
+                    <line x1="200" y1="280" x2="120" y2="360" stroke="#8c4a08" strokeWidth="2"/>
+                  </svg>
                   
-                  <div className="absolute top-1/2 left-0 w-full h-16 -translate-y-1/2 flex items-center justify-center text-2xl text-amber-800 font-serif" style={{letterSpacing: '1rem'}}>
+                  {/* 楚河汉界文字 */}
+                  <div className="absolute left-0 right-0 flex items-center justify-center text-lg text-amber-800 font-serif font-bold" 
+                       style={{ top: '170px', height: '40px', letterSpacing: '2rem', paddingLeft: '2rem' }}>
                     楚河 漢界
                   </div>
-
-                  <svg width="100%" height="100%" className="absolute top-0 left-0 overflow-visible">
-                    <line x1="calc(3 * 4rem + 2rem)" y1="calc(0 * 4rem + 2rem)" x2="calc(5 * 4rem + 2rem)" y2="calc(2 * 4rem + 2rem)" stroke="#8c4a08" strokeWidth="1"/>
-                    <line x1="calc(5 * 4rem + 2rem)" y1="calc(0 * 4rem + 2rem)" x2="calc(3 * 4rem + 2rem)" y2="calc(2 * 4rem + 2rem)" stroke="#8c4a08" strokeWidth="1"/>
-                    <line x1="calc(3 * 4rem + 2rem)" y1="calc(7 * 4rem + 2rem)" x2="calc(5 * 4rem + 2rem)" y2="calc(9 * 4rem + 2rem)" stroke="#8c4a08" strokeWidth="1"/>
-                    <line x1="calc(5 * 4rem + 2rem)" y1="calc(7 * 4rem + 2rem)" x2="calc(3 * 4rem + 2rem)" y2="calc(9 * 4rem + 2rem)" stroke="#8c4a08" strokeWidth="1"/>
-                  </svg>
 
                   {displayBoard.flat().map((piece, index) => {
                     if (!piece) return null;
@@ -242,24 +295,36 @@ const XiangqiTutor: React.FC = () => {
                     return (
                       <div
                         key={`${row}-${col}`}
-                        className={`absolute w-16 h-16 flex items-center justify-center text-3xl font-bold transition-all duration-500 ease-in-out transform -translate-x-1/2 -translate-y-1/2`}
+                        className={`absolute flex items-center justify-center text-2xl font-bold transition-all duration-500 ease-in-out`}
                         style={{
-                          top: `calc(${row} * 4rem + 2rem)`,
-                          left: `calc(${col} * 4rem + 2rem)`,
+                          top: `${20 + row * 40 - 20}px`, // 精确定位到交叉点
+                          left: `${20 + col * 40 - 20}px`, // 精确定位到交叉点
+                          width: '40px',
+                          height: '40px',
                         }}
                       >
-                        <div className={`w-14 h-14 rounded-full flex items-center justify-center ${getPieceColor(piece)} bg-amber-100 shadow-md border-2 border-amber-400`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${getPieceColor(piece)} bg-amber-100 shadow-lg border-2 border-amber-600`}>
                           {piece}
                         </div>
                       </div>
                     );
                   })}
-                  
-                  <div className="absolute -bottom-8 w-full flex justify-around text-amber-800 font-bold">
-                    {redLabels.map((label, i) => <span key={label} style={{width: '4rem', textAlign: 'center'}}>{label}</span>)}
+                  {/* 坐标标签 */}
+                  <div className="absolute flex justify-between text-amber-800 font-bold text-sm" 
+                       style={{ bottom: '-25px', left: '20px', width: '320px' }}>
+                    {redLabels.map((label) => (
+                      <span key={label} className="flex justify-center" style={{ width: '40px' }}>
+                        {label}
+                      </span>
+                    ))}
                   </div>
-                   <div className="absolute -top-8 w-full flex justify-around text-amber-800 font-bold">
-                    {blackLabels.map(label => <span key={label} style={{width: '4rem', textAlign: 'center'}}>{label}</span>)}
+                  <div className="absolute flex justify-between text-amber-800 font-bold text-sm" 
+                       style={{ top: '-25px', left: '20px', width: '320px' }}>
+                    {blackLabels.map((label) => (
+                      <span key={label} className="flex justify-center" style={{ width: '40px' }}>
+                        {label}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
