@@ -60,17 +60,18 @@ const XiangqiTutor: React.FC = () => {
         '车': 'r', '马': 'n', '相': 'b', '仕': 'a', '帅': 'k', '炮': 'c', '兵': 'p',
         '車': 'R', '馬': 'N', '象': 'B', '士': 'A', '將': 'K', '砲': 'C', '卒': 'P'
     };
+    
     let fen = '';
     for (let i = 0; i < 10; i++) {
         let empty = 0;
         for (let j = 0; j < 9; j++) {
             const piece = board[i][j];
-            if (piece) {
+            if (piece && pieceMap[piece]) {
                 if (empty > 0) {
                     fen += empty;
                     empty = 0;
                 }
-                fen += pieceMap[piece] || '';
+                fen += pieceMap[piece];
             } else {
                 empty++;
             }
@@ -78,20 +79,30 @@ const XiangqiTutor: React.FC = () => {
         if (empty > 0) fen += empty;
         if (i < 9) fen += '/';
     }
+    
+    // 标准象棋 FEN 格式：红方用 'w'，黑方用 'b'
     fen += isRedTurn ? ' w' : ' b';
     fen += ' - - 0 1';
     return fen;
   };
 
   const analyzePosition = async () => {
-    const fen = boardToFen(displayBoard, currentMoveIndex % 2 === 0);
-    setAnalysisResult('分析中...');
     try {
+      const fen = boardToFen(displayBoard, currentMoveIndex % 2 === 0);
+      console.log('Generated FEN:', fen); // 调试用
+      setAnalysisResult('分析中...');
+      
       const response = await fetch(`/api/chessdb?fen=${encodeURIComponent(fen)}`);
       const result = await response.json();
-      setAnalysisResult(result.data || '分析失败');
+      
+      if (result.error) {
+        setAnalysisResult(`错误: ${result.error}`);
+      } else {
+        setAnalysisResult(result.data || '分析完成，但没有返回数据');
+      }
     } catch (error) {
-      setAnalysisResult('API 请求失败');
+      console.error('Analysis error:', error);
+      setAnalysisResult('API 请求失败，请检查网络连接');
     }
   };
 
