@@ -13,6 +13,10 @@ const XiangqiTutor: React.FC = () => {
   const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [practiceMode, setPracticeMode] = useState<boolean>(false);
+  const [playerMove, setPlayerMove] = useState<string>('');
+  const [hints, setHints] = useState<string>('');
+  const [selectedSquare, setSelectedSquare] = useState<[number, number] | null>(null);
 
   const initialBoard: string[][] = useMemo(() => [
     ['車', '馬', '象', '士', '將', '士', '象', '馬', '車'],
@@ -134,6 +138,51 @@ const XiangqiTutor: React.FC = () => {
     setCurrentMoveIndex(prev => Math.max(prev - 1, 0));
   }, []);
 
+  const togglePracticeMode = useCallback(() => {
+    setPracticeMode(!practiceMode);
+    setPlayerMove('');
+    setHints('');
+    setSelectedSquare(null);
+    if (!practiceMode) {
+      setIsPlaying(false);
+      if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+    }
+  }, [practiceMode]);
+
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (practiceMode) return;
+      
+      switch (event.key) {
+        case ' ':
+          event.preventDefault();
+          playAnimation();
+          break;
+        case 'ArrowLeft':
+          event.preventDefault();
+          prevMove();
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          nextMove();
+          break;
+        case 'r':
+        case 'R':
+          event.preventDefault();
+          resetBoard();
+          break;
+        case 'p':
+        case 'P':
+          event.preventDefault();
+          togglePracticeMode();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [practiceMode, playAnimation, prevMove, nextMove, resetBoard, togglePracticeMode]);
+
   const jumpToMove = useCallback((moveIndex: number) => {
     setCurrentMoveIndex(moveIndex);
     setIsPlaying(false);
@@ -150,20 +199,100 @@ const XiangqiTutor: React.FC = () => {
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.;
+    const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
           const importedData = JSON.parse(e.target?.result as string);
           if (importedData.name && importedData.variations && importedData.variations.length > 0) {
-            setMoves(importedData.variations.moves);
+            setMoves(importedData.variations[0].moves);
           }
         } catch (error) {
           alert('无效的棋谱文件');
         }
       };
       reader.readAsText(file);
+    }
+  };
+
+  const checkPlayerMove = () => {
+    if (currentMoveIndex >= moves.length) return;
+    
+    const expectedMove = moves[currentMoveIndex];
+    if (playerMove.trim() === expectedMove.move) {
+      setHints('正确！');
+      setTimeout(() => {
+        setCurrentMoveIndex(prev => prev + 1);
+        setPlayerMove('');
+        setHints('');
+      }, 1000);
+    } else {
+      setHints(`提示：应该走 ${expectedMove.move}`);
+    }
+  };
+
+  const generateMoveNotation = (piece: string, from: [number, number], to: [number, number]): string => {
+    const [fromRow, fromCol] = from;
+    const [toRow, toCol] = to;
+    
+    const colNames = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    const isRed = ['车', '马', '相', '仕', '帅', '炮', '兵'].includes(piece);
+    
+    if (isRed) {
+      if (fromRow === toRow) {
+        return `${piece}${colNames[8-fromCol]}平${colNames[8-toCol]}`;
+      } else if (fromRow > toRow) {
+        return `${piece}${colNames[8-fromCol]}进${Math.abs(fromRow - toRow)}`;
+      } else {
+        return `${piece}${colNames[8-fromCol]}退${Math.abs(fromRow - toRow)}`;
+      }
+    } else {
+      const blackColNames = ['１', '２', '３', '４', '５', '６', '７', '８', '９'];
+      if (fromRow === toRow) {
+        return `${piece}${blackColNames[fromCol]}平${blackColNames[toCol]}`;
+      } else if (fromRow < toRow) {
+        return `${piece}${blackColNames[fromCol]}进${Math.abs(fromRow - toRow)}`;
+      } else {
+        return `${piece}${blackColNames[fromCol]}退${Math.abs(fromRow - toRow)}`;
+      }
+    }
+  };
+
+  const handleSquareClick = (row: number, col: number) => {
+    if (!practiceMode) return;
+    
+    if (selectedSquare) {
+      const [fromRow, fromCol] = selectedSquare;
+      if (fromRow === row && fromCol === col) {
+        setSelectedSquare(null);
+        return;
+      }
+      
+      const piece = displayBoard[fromRow][fromCol];
+      if (piece) {
+        const moveNotation = generateMoveNotation(piece, [fromRow, fromCol], [row, col]);
+        setPlayerMove(moveNotation);
+        setSelectedSquare(null);
+      }
+    } else {
+      if (displayBoard[row][col]) {
+        setSelectedSquare([row, col]);
+      }
+    }
+  };
+
+  const loadGameFromChessDB = async (gameId: string) => {
+    try {
+      const response = await fetch(`/api/chessdb?gameId=${encodeURIComponent(gameId)}`);
+      const result = await response.json();
+      if (result.moves) {
+        setMoves(result.moves);
+        setCurrentMoveIndex(0);
+        setIsPlaying(false);
+      }
+    } catch (error) {
+      alert('加载棋谱失败');
     }
   };
 
@@ -251,15 +380,37 @@ const XiangqiTutor: React.FC = () => {
                 </div>
             </div>
             <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">导入/导出</h3>
-                <div className="flex gap-4">
-                    <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
-                        <Upload className="w-5 h-5" /> 导入
-                    </button>
-                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".json" className="hidden" />
-                    <button onClick={exportToJson} className="flex-1 flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
-                        <Download className="w-5 h-5" /> 导出
-                    </button>
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">棋谱管理</h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">从ChessDB加载棋谱</label>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="输入棋谱ID或FEN串" 
+                                className="flex-1 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500"
+                                id="chessdb-input"
+                            />
+                            <button 
+                                onClick={() => {
+                                    const input = document.getElementById('chessdb-input') as HTMLInputElement;
+                                    if (input.value) loadGameFromChessDB(input.value);
+                                }}
+                                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                            >
+                                加载
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                            <Upload className="w-5 h-5" /> 导入JSON
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".json" className="hidden" />
+                        <button onClick={exportToJson} className="flex-1 flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
+                            <Download className="w-5 h-5" /> 导出
+                        </button>
+                    </div>
                 </div>
             </div>
           </div>
@@ -299,9 +450,15 @@ const XiangqiTutor: React.FC = () => {
                     if (!piece) return null;
                     const row = Math.floor(index / 9);
                     const col = index % 9;
+                    const isSelected = selectedSquare && selectedSquare[0] === row && selectedSquare[1] === col;
                     return (
-                      <div key={`${row}-${col}`} className={`absolute flex items-center justify-center text-2xl font-bold transition-all duration-500 ease-in-out`} style={{ top: `${20 + row * 40 - 20}px`, left: `${20 + col * 40 - 20}px`, width: '40px', height: '40px' }}>
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${getPieceColor(piece)} bg-amber-100 shadow-lg border-2 border-amber-600`}>
+                      <div 
+                        key={`${row}-${col}`} 
+                        className={`absolute flex items-center justify-center text-2xl font-bold transition-all duration-500 ease-in-out cursor-pointer ${practiceMode ? 'hover:scale-110' : ''}`} 
+                        style={{ top: `${20 + row * 40 - 20}px`, left: `${20 + col * 40 - 20}px`, width: '40px', height: '40px' }}
+                        onClick={() => handleSquareClick(row, col)}
+                      >
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${getPieceColor(piece)} ${isSelected ? 'bg-yellow-300 border-3 border-yellow-500' : 'bg-amber-100'} shadow-lg border-2 border-amber-600`}>
                           {piece}
                         </div>
                       </div>
@@ -327,21 +484,55 @@ const XiangqiTutor: React.FC = () => {
 
             {moves.length > 0 && (
               <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
-                <h3 className="text-lg font-semibold mb-4 text-gray-800">播放控制</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">播放控制</h3>
+                  <button 
+                    onClick={togglePracticeMode}
+                    className={`px-4 py-2 rounded-lg transition-colors ${practiceMode ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                  >
+                    {practiceMode ? '退出练习' : '练习模式'}
+                  </button>
+                </div>
+
+                {practiceMode && (
+                  <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                    <div className="flex gap-2 mb-2">
+                      <input 
+                        type="text" 
+                        value={playerMove}
+                        onChange={(e) => setPlayerMove(e.target.value)}
+                        placeholder="输入你的招法，如：炮二平五"
+                        className="flex-1 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <button 
+                        onClick={checkPlayerMove}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        确认
+                      </button>
+                    </div>
+                    {hints && <p className="text-sm text-blue-600 mt-2">{hints}</p>}
+                    <p className="text-xs text-gray-600 mt-2">
+                      提示：点击棋子然后点击目标位置，或直接输入招法<br/>
+                      快捷键：空格键=播放/暂停, ←→=上下步, R=重置, P=练习模式
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-center gap-2 md:gap-4 flex-wrap">
                   <button onClick={resetBoard} className="flex items-center gap-2 bg-gray-500 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm">
                     <RotateCcw className="w-4 h-4 md:w-5 md:h-5" />
                     重置
                   </button>
-                  <button onClick={prevMove} disabled={currentMoveIndex === 0} className="flex items-center gap-2 bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                  <button onClick={prevMove} disabled={currentMoveIndex === 0 || practiceMode} className="flex items-center gap-2 bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                     <ChevronLeft className="w-4 h-4 md:w-5 md:h-5" />
                     上一步
                   </button>
-                  <button onClick={playAnimation} className="flex items-center gap-2 bg-green-500 text-white px-4 md:px-6 py-2 rounded-lg hover:bg-green-600 transition-colors text-sm">
+                  <button onClick={playAnimation} disabled={practiceMode} className="flex items-center gap-2 bg-green-500 text-white px-4 md:px-6 py-2 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                     {isPlaying ? <Pause className="w-4 h-4 md:w-5 md:h-5" /> : <Play className="w-4 h-4 md:w-5 md:h-5" />}
                     {isPlaying ? '暂停' : '播放'}
                   </button>
-                  <button onClick={nextMove} disabled={currentMoveIndex >= moves.length} className="flex items-center gap-2 bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                  <button onClick={nextMove} disabled={currentMoveIndex >= moves.length || practiceMode} className="flex items-center gap-2 bg-blue-500 text-white px-3 md:px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                     下一步
                     <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />
                   </button>
